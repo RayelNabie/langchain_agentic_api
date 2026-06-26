@@ -1,0 +1,8 @@
+services:
+  app:
+    build:
+      target: builder
+    command: yarn run dev
+    volumes:
+      - .:/app/
+      - /app/node_modules

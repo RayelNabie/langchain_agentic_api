@@ -1,0 +1,20 @@
+name: Optimized CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  setup:
+    uses: ./.github/workflows/setup.yml
+
+  lint:
+    uses: ./.github/workflows/lint.yml
+    needs: setup
+
+  test:
+    uses: ./.github/workflows/test.yml
+    needs: setup
