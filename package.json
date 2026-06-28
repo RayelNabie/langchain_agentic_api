@@ -17,17 +17,19 @@
     "dev": "nodemon --verbose --config nodemon.json --exec 'node --loader ts-node/esm --no-warnings' src/app.ts",
     "start": "node --conditions=production build/app.js",
     "build": "tsc",
+    "format": "prettier --write .",
     "lint": "eslint",
-    "test": "vitest"
+    "test": "vitest",
+    "ingest": "node --loader ts-node/esm --no-warnings src/rag/ingest.ts"
   },
   "dependencies": {
     "@langchain/community": "^1.1.27",
     "@langchain/core": "^1.1.42",
     "@langchain/openai": "^1.4.5",
+    "@langchain/textsplitters": "^1.0.1",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "pg": "^8.20.0",
-    "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
@@ -36,7 +38,6 @@
     "@types/node": "^25.5.0",
     "@types/pg": "^8.20.0",
     "@types/supertest": "^7.2.0",
-    "@types/swagger-jsdoc": "^6.0.4",
     "@types/swagger-ui-express": "^4.1.8",
     "eslint": "^10.1.0",
     "eslint-config-prettier": "^10.1.8",

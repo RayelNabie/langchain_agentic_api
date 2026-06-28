@@ -1,0 +1,283 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "AI Scrum Assistant API",
+    "version": "2.0.0",
+    "description": "LangChain-agent die productdocumentatie doorzoekt via RAG en taken aanmaakt op Planka. Ondersteunt per-board document upload en configureerbare verplichte velden voor user stories."
+  },
+  "servers": [{ "url": "http://localhost:3000", "description": "Local dev" }],
+  "tags": [
+    { "name": "Agent", "description": "LangChain Scrum-assistent" },
+    { "name": "Documents", "description": "Per-board RAG-documentatie" }
+  ],
+  "paths": {
+    "/chat": {
+      "post": {
+        "summary": "Stuur een prompt naar de Scrum-agent",
+        "description": "Verwerkt een prompt via de LangChain-agent. De agent schakelt zelfstandig tussen drie tools:\n- `search_product_docs` — RAG op productdocumentatie (pgvector, per board of globaal)\n- `create_planka_task` — user story aanmaken op het Kanban-bord\n- `analyze_team_workload` — werklastanalyse per teamlid\n\nChatgeschiedenis wordt per `sessionId` persistent opgeslagen in PostgreSQL.\n\nZet `stream: true` voor Server-Sent Events. `boardId` en `listId` zijn afkomstig van de frontend; zonder deze velden geven de Planka-tools een melding terug.\n\nVia `settings` bepaal je welke velden de agent verplicht uitvraagt vóór het aanmaken van een story.",
+        "tags": ["Agent"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["prompt"],
+                "properties": {
+                  "prompt": {
+                    "type": "string",
+                    "example": "Maak een story voor de offline routekaart"
+                  },
+                  "stream": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "true = Server-Sent Events, false = JSON"
+                  },
+                  "sessionId": {
+                    "type": "string",
+                    "description": "UUID voor persistente chatgeschiedenis per gebruiker",
+                    "example": "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+                  },
+                  "boardId": {
+                    "type": "string",
+                    "description": "Planka board-ID. Vereist voor `analyze_team_workload` en per-board RAG.",
+                    "example": "1806043573049623559"
+                  },
+                  "listId": {
+                    "type": "string",
+                    "description": "Planka lijst-ID (kolom) voor nieuwe kaarten. Vereist voor `create_planka_task`.",
+                    "example": "1806043902336041995"
+                  },
+                  "settings": {
+                    "type": "object",
+                    "description": "Bepaalt welke velden de agent verplicht uitvraagt vóór het aanmaken van een story. Ontbrekende velden zijn optioneel (agent vraagt erna achteraf).",
+                    "properties": {
+                      "requireDescription": {
+                        "type": "boolean",
+                        "default": false
+                      },
+                      "requireAcceptanceCriteria": {
+                        "type": "boolean",
+                        "default": false
+                      },
+                      "requireDueDate": {
+                        "type": "boolean",
+                        "default": false
+                      },
+                      "autoAssign": {
+                        "type": "boolean",
+                        "default": false,
+                        "description": "Wijst automatisch het teamlid met de minste taken toe aan de nieuwe story."
+                      }
+                    }
+                  }
+                }
+              },
+              "examples": {
+                "eenvoudig": {
+                  "summary": "Eenvoudige prompt zonder settings",
+                  "value": {
+                    "prompt": "Maak een story voor de offline routekaart",
+                    "stream": true,
+                    "sessionId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                    "boardId": "1806043573049623559",
+                    "listId": "1806043902336041995"
+                  }
+                },
+                "met-settings": {
+                  "summary": "Prompt met verplichte acceptatiecriteria en deadline",
+                  "value": {
+                    "prompt": "We hebben een meldingenmodule nodig voor calamiteiten",
+                    "stream": true,
+                    "sessionId": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+                    "boardId": "1806043573049623559",
+                    "listId": "1806043902336041995",
+                    "settings": {
+                      "requireAcceptanceCriteria": true,
+                      "requireDueDate": true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Geslaagd — JSON of SSE event stream",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "answer": {
+                      "type": "string",
+                      "example": "De story is aangemaakt op het bord."
+                    },
+                    "toolCalls": {
+                      "type": "array",
+                      "description": "Tools die de agent heeft aangeroepen, inclusief validatiestatus",
+                      "items": {
+                        "$ref": "#/components/schemas/ToolCallLog"
+                      }
+                    },
+                    "sources": {
+                      "type": "array",
+                      "description": "RAG-bronnen gebruikt door search_product_docs",
+                      "items": {
+                        "$ref": "#/components/schemas/Source"
+                      }
+                    }
+                  }
+                }
+              },
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "example": "data: {\"type\":\"token\",\"content\":\"De story\"}\n\ndata: {\"type\":\"tool_start\",\"tool\":\"search_product_docs\",\"input\":{\"query\":\"routekaart offline\"}}\n\ndata: {\"type\":\"tool_end\",\"tool\":\"search_product_docs\",\"output\":\"{\\\"results\\\":[...]}\"}\n\ndata: {\"type\":\"done\",\"toolCalls\":[{\"tool\":\"search_product_docs\",\"input\":{\"query\":\"routekaart offline\"},\"output\":\"...\",\"status\":\"success\"}],\"sources\":[{\"content\":\"...\",\"source\":\"epics.txt\"}]}\n\nevent: end\ndata: [DONE]\n"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Prompt ontbreekt",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "error": "prompt cannot be empty" }
+              }
+            }
+          },
+          "500": {
+            "description": "Interne fout (LLM onbereikbaar of Planka-fout)",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "error": "AI Error", "details": "Service connection timeout" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/documents": {
+      "post": {
+        "summary": "Upload een document voor een specifiek board",
+        "description": "Splitst de tekst in chunks, embedt ze via Azure OpenAI en slaat ze op in pgvector met het opgegeven `boardId`. De agent gebruikt deze documenten bij `search_product_docs`-aanroepen voor dit board.\n\nDocumenten zonder `boardId` worden opgeslagen als globaal (zichtbaar voor alle boards).\n\nDe frontend leest het bestand client-side via `File.text()` en stuurt de inhoud als JSON — geen multipart upload nodig.",
+        "tags": ["Documents"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["source", "content"],
+                "properties": {
+                  "boardId": {
+                    "type": "string",
+                    "description": "Planka board-ID. Weglaten voor globale documenten (zichtbaar voor alle boards).",
+                    "example": "1806043573049623559"
+                  },
+                  "source": {
+                    "type": "string",
+                    "description": "Bestandsnaam of label — wordt getoond als bronvermelding in de frontend.",
+                    "example": "productvisie.txt"
+                  },
+                  "content": {
+                    "type": "string",
+                    "description": "Volledige tekst van het document.",
+                    "example": "ZorgRoute is een mobiele route- en planningsapp voor wijkverpleging..."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Document succesvol opgeslagen",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "chunks": {
+                      "type": "integer",
+                      "description": "Aantal chunks opgeslagen in pgvector",
+                      "example": 6
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "source of content ontbreekt",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" },
+                "example": { "error": "source and content are required" }
+              }
+            }
+          },
+          "500": {
+            "description": "Embedding of database-fout",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ToolCallLog": {
+        "type": "object",
+        "properties": {
+          "tool": {
+            "type": "string",
+            "example": "search_product_docs",
+            "description": "Naam van de tool"
+          },
+          "input": {
+            "type": "object",
+            "example": { "query": "wie zijn onze gebruikers" }
+          },
+          "output": {
+            "type": "string",
+            "example": "{\"results\":[{\"content\":\"Fatima Al-Hassan...\",\"source\":\"personas.txt\"}]}"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["success", "invalid", "error"],
+            "description": "success = correct uitgevoerd, invalid = ontbrekende args of tool niet gevonden, error = runtime-fout",
+            "example": "success"
+          }
+        }
+      },
+      "Source": {
+        "type": "object",
+        "properties": {
+          "content": {
+            "type": "string",
+            "example": "Fatima Al-Hassan, wijkverpleegkundige niveau 4, bezoekt dagelijks 11 cliënten..."
+          },
+          "source": {
+            "type": "string",
+            "example": "personas.txt"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": { "type": "string" },
+          "details": { "type": "string" }
+        }
+      }
+    }
+  }
+}

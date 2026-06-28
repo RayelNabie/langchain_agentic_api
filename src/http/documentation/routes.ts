@@ -1,21 +1,13 @@
-/**
- * @file Mounts the Swagger UI and the raw OpenAPI JSON document.
- *
- * @module http/documentation/routes
- * @author RayelNabie
- */
-
-import { Router, type Request, type Response } from 'express';
+import { Router } from 'express';
 import swaggerUi from 'swagger-ui-express';
-import { swaggerSpec } from '#http/documentation/spec.js';
+import { createRequire } from 'node:module';
 
-const router: Router = Router();
+// needs to parse through a require import since I somehow cannot import a json to parse
+const require: NodeJS.Require = createRequire(import.meta.url);
+const spec: JSON = require('./openapi.json');
 
-router.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
-
-router.get('/api-docs.json', (req: Request, res: Response): void => {
-  res.setHeader('Content-Type', 'application/json');
-  res.send(swaggerSpec);
-});
+const router = Router();
+router.get('/api-docs.json', (_req, res) => res.json(spec));
+router.use('/api-docs', swaggerUi.serve, swaggerUi.setup(spec));
 
 export default router;

@@ -12,9 +12,29 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      planka:
+        condition: service_started
     restart: unless-stopped
+
+  planka:
+    image: ghcr.io/plankanban/planka:latest
+    restart: unless-stopped
+    ports:
+      - '3333:1337'
+    environment:
+      BASE_URL: http://localhost:3333
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgres}@postgres/${DB_NAME:-postgres}
+      SECRET_KEY: ${PLANKA_SECRET_KEY:-changeme_in_production}
+      DEFAULT_ADMIN_EMAIL: ${PLANKA_ADMIN_EMAIL:-admin@scrum.local}
+      DEFAULT_ADMIN_PASSWORD: ${PLANKA_ADMIN_PASSWORD:-admin}
+      DEFAULT_ADMIN_NAME: ${PLANKA_ADMIN_NAME:-Admin}
+      DEFAULT_ADMIN_USERNAME: ${PLANKA_ADMIN_USERNAME:-admin}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   postgres:
-    image: postgres:18.3-alpine
+    image: pgvector/pgvector:pg18
     container_name: postgres
     hostname: postgres
     env_file:
@@ -25,9 +45,12 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       TZ: Europe/Amsterdam
       PGTZ: Europe/Amsterdam
+    ports:
+      - '5432:5432'
     volumes:
       - ./data:/var/lib/postgresql
       - ./logs:/var/log/postgresql
+      - ./src/data/init.sql:/docker-entrypoint-initdb.d/init.sql
     command: >
       postgres -c logging_collector=on
                -c log_directory=/var/log/postgresql

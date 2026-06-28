@@ -135,3 +135,4 @@ build
 #editor settings
 .vscode
 .idea
+.claude

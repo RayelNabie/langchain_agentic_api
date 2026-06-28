@@ -1,16 +1,22 @@
-/**
- * @file Abstraction every LLM provider integration must implement. ChatService
- * only depends on this interface, so swapping providers means writing a
- * new model factory, not touching the facade or controllers.
- *
- * @module llm/LlmAdapter
- * @author RayelNabie
- */
-
-import type { BaseMessage, BaseMessageChunk } from '@langchain/core/messages';
-import type { IterableReadableStream } from '@langchain/core/utils/stream';
-
-export interface LlmAdapter {
-  chat(prompt: string, sessionId?: string): Promise<BaseMessage>;
-  stream(prompt: string, sessionId?: string): Promise<IterableReadableStream<BaseMessageChunk>>;
+export enum ToolCallStatus {
+  Success = 'success',
+  Invalid = 'invalid',
+  Error = 'error',
 }
+export type ToolCallLog = { tool: string; input: unknown; output: string; status: ToolCallStatus };
+export type Source = { content: string; source: string };
+export type AgentResponse = { message: string; toolCalls: ToolCallLog[]; sources: Source[] };
+
+export type AgentStreamEvent =
+  | { type: 'token'; content: string }
+  | { type: 'tool_start'; tool: string; input: unknown }
+  | { type: 'tool_end'; tool: string; output: string }
+  | { type: 'done'; toolCalls: ToolCallLog[]; sources: Source[] };
+
+export type CreateTaskInput = {
+  title: string;
+  description?: string;
+  acceptanceCriteria?: string[];
+  dueDate?: string;
+  assigneeName?: string;
+};

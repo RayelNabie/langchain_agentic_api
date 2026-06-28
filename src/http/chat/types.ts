@@ -1,22 +1,21 @@
-/**
- * @file Body shape for the /chat endpoint.
- *
- * @module http/chat/types
- * @author RayelNabie
- */
-
-import type { BaseMessage, ResponseMetadata, UsageMetadata } from '@langchain/core/messages';
+import type { ToolCallLog, Source } from '#llm/types.js';
 
 export type ChatResponse =
-  | {
-      answer: BaseMessage['content'];
-      metadata: ResponseMetadata;
-      usage?: UsageMetadata;
-    }
+  | { answer: string; toolCalls: ToolCallLog[]; sources: Source[] }
   | { error: string; details?: string };
+
+export type StorySettings = {
+  requireAcceptanceCriteria: boolean;
+  requireDescription: boolean;
+  requireDueDate: boolean;
+  autoAssign: boolean;
+};
 
 export interface ChatRequest {
   prompt?: string;
   stream?: boolean;
   sessionId?: string;
+  boardId?: string;
+  listId?: string;
+  settings?: Partial<StorySettings>;
 }
