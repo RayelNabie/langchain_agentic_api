@@ -2,7 +2,6 @@ import { Request, Response } from 'express';
 import Agent from '#llm/Agent.js';
 import { createAzureModel } from '#llm/azure.js';
 import type { ChatRequest, ChatResponse } from '#http/chat/types.js';
-import type { AgentResponse } from '#llm/types.js';
 
 const agent = new Agent(createAzureModel);
 
@@ -11,30 +10,23 @@ export async function handleChat(
   res: Response<ChatResponse>,
 ): Promise<void> {
   try {
-    const { prompt, stream, sessionId, boardId, listId, settings } = req.body;
+    const { prompt, sessionId, boardId, listId, settings } = req.body;
 
     if (!prompt) {
       res.status(400).json({ error: 'prompt cannot be empty' });
       return;
     }
 
-    if (stream) {
-      res.setHeader('Content-Type', 'text/event-stream');
-      res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('Connection', 'keep-alive');
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
 
-      for await (const event of agent.streamEvents(prompt, sessionId, boardId, listId, settings)) {
-        res.write(`data: ${JSON.stringify(event)}\n\n`);
-      }
-
-      res.write('event: end\ndata: [DONE]\n\n');
-      res.end();
-      return;
+    for await (const event of agent.streamEvents(prompt, sessionId, boardId, listId, settings)) {
+      res.write(`data: ${JSON.stringify(event)}\n\n`);
     }
 
-    const result: AgentResponse = await agent.chat(prompt, sessionId, boardId, listId, settings);
-
-    res.json({ answer: result.message, toolCalls: result.toolCalls, sources: result.sources });
+    res.write('event: end\ndata: [DONE]\n\n');
+    res.end();
   } catch (error: unknown) {
     const message: string = error instanceof Error ? error.message : String(error);
 

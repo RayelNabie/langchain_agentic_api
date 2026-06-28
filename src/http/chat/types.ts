@@ -13,7 +13,6 @@ export type StorySettings = {
 
 export interface ChatRequest {
   prompt?: string;
-  stream?: boolean;
   sessionId?: string;
   boardId?: string;
   listId?: string;

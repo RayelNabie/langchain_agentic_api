@@ -141,9 +141,9 @@ export default class Agent {
       }
 
       for (const toolCall of accumulated.tool_calls) {
-        yield { type: 'tool_start', tool: toolCall.name, input: toolCall.args };
+        yield { type: 'tool_start', tool: toolCall.name };
         const { output, status } = await Agent.useTool(toolCall, sessionTools, sources);
-        yield { type: 'tool_end', tool: toolCall.name, output };
+        yield { type: 'tool_end', tool: toolCall.name };
         toolCalls.push({ tool: toolCall.name, input: toolCall.args, output, status });
         messages.push(new ToolMessage({ content: output, tool_call_id: toolCall.id ?? '' }));
       }
